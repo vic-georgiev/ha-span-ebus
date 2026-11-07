@@ -321,6 +321,26 @@ def _node_names(frame: Frame, circuits: dict[int, CircuitInfo]) -> dict[str, str
     return names
 
 
+# A branch circuit's wiring says which breaker sits behind it: two wires (one hot
+# and neutral) is a 120 V single-pole breaker, three (two hots) a 240 V two-pole.
+_VOLTS_BY_KIND = {"two_wire": 120, "three_wire": 240}
+
+
+def _breaker_details(sample: CircuitSample, circuits: dict[int, CircuitInfo]) -> dict:
+    """Spaces, rating and voltage of the breaker behind one circuit sample."""
+    details: dict = {}
+    volts = _VOLTS_BY_KIND.get(sample.kind)
+    if volts is not None:
+        details["volts"] = volts
+    info = circuits.get(sample.instance_id)
+    if info is not None:
+        if info.spaces:
+            details["spaces"] = info.spaces
+        if info.breaker_amps:
+            details["breaker_amps"] = info.breaker_amps
+    return details
+
+
 def schema_from_frame(
     serial: str, frame: Frame, circuits: dict[int, CircuitInfo] | None = None
 ) -> PanelSchema:
@@ -342,6 +362,7 @@ def schema_from_frame(
     for samples in frame.resources.values():
         for sample in samples:
             node_id, kind = _node_for(sample, circuits)
+            breaker = _breaker_details(sample, circuits) if kind is NodeKind.CIRCUIT else {}
             for prop_id, unit, _source, _attr in _PROPS_BY_KIND.get(sample.kind, ()):
                 schema.add(
                     PropertySpec(
@@ -352,6 +373,7 @@ def schema_from_frame(
                         datatype=DataType.FLOAT,
                         unit=unit,
                         node_name=names.get(node_id),
+                        **breaker,
                     )
                 )
             # Only circuits whose switch trait the snapshot resolved get a relay,

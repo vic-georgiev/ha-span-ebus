@@ -126,6 +126,35 @@ def test_schema_names_nodes_from_the_trait_snapshot():
     assert "circuit-54/power" in schema.properties
 
 
+def test_schema_carries_the_breaker_behind_each_circuit():
+    schema = cloud.schema_from_frame("<cloud-serial>", _frame(), _circuits())
+    power = schema.properties["circuit-54/power"]
+    assert power.spaces == (33,)
+    assert power.breaker_amps == 20
+    assert power.volts == 120
+    # Every property of the circuit carries the same breaker.
+    assert schema.properties["circuit-54/current"].breaker_amps == 20
+    # Nothing that is not a branch circuit claims a breaker.
+    for key in ("panel/power", "feed-2/power", "site/grid"):
+        spec = schema.properties[key]
+        assert (spec.spaces, spec.breaker_amps, spec.volts) == ((), None, None)
+
+
+def test_schema_marks_a_two_pole_breaker_as_240_volts():
+    frame = _frame()
+    frame.resources["res1"].append(
+        CircuitSample(
+            instance_id=56,
+            kind="three_wire",
+            combined=Channel(current_ma=100, power_mw=24000),
+        )
+    )
+    circuits = _circuits()
+    circuits[56] = CircuitInfo(instance_id=56, label="Dryer", spaces=(35, 37), breaker_amps=30)
+    spec = cloud.schema_from_frame("<cloud-serial>", frame, circuits).properties["circuit-56/power"]
+    assert (spec.spaces, spec.breaker_amps, spec.volts) == ((35, 37), 30, 240)
+
+
 def test_duplicate_labels_are_qualified_by_panel_space():
     frame = _frame()
     frame.resources["res1"].append(

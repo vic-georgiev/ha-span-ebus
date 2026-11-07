@@ -30,6 +30,7 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -38,7 +39,8 @@ from .coordinator import STALE_AFTER_SECONDS, SpanCloudCoordinator
 from .energy import EnergyAccumulator
 from .span_client.backend import POWER_PROPERTY, SITE_NODE, is_main_feed_power, panel_overhead
 from .span_client.cloud_history import SITE_FLOW_ENERGY
-from .span_client.models import NodeKind, PropertySpec
+from .span_client.models import NodeKind, PropertySpec, Reading
+from .span_client.throttle import POWER, Throttle, policy_for
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +55,34 @@ ENERGY_PRECISION = 3
 # window there are no readings from would put a fabricated step into long-term
 # statistics.
 MAX_INTEGRATION_GAP_SECONDS = STALE_AFTER_SECONDS
+
+
+# Readings that describe the electrical supply rather than what a load is doing.
+# Useful when diagnosing, noise in an everyday entity list: they start hidden and
+# disabled, and can be enabled one by one from the entity's settings.
+_DIAGNOSTIC_UNITS = frozenset({"A", "V", "Hz"})
+
+
+def _as_float(reading: Reading | None) -> float | None:
+    if reading is None:
+        return None
+    try:
+        return float(reading.value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _breaker_attributes(spec: PropertySpec) -> dict[str, object]:
+    """Breaker details for a circuit's power sensor, for dashboards and templates."""
+    attributes: dict[str, object] = {}
+    if spec.spaces:
+        attributes["panel_spaces"] = list(spec.spaces)
+    if spec.breaker_amps:
+        attributes["breaker_amps"] = spec.breaker_amps
+    if spec.volts:
+        attributes["breaker_volts"] = spec.volts
+        attributes["breaker_poles"] = 2 if spec.volts == 240 else 1
+    return attributes
 
 
 def _is_metered(spec: PropertySpec) -> bool:
@@ -104,7 +134,7 @@ def _register(coordinator: SpanCloudCoordinator, async_add_entities: AddEntities
             # The main feed arrives once per panel, so it is what gates the one
             # derived pair built on it; a panel without one gets no overhead.
             if is_main_feed_power(spec):
-                entities.append(SpanPanelOverheadSensor(coordinator))
+                entities.append(SpanPanelOverheadSensor(coordinator, spec))
                 entities.append(SpanPanelOverheadEnergySensor(coordinator, spec))
         async_add_entities(entities)
 
@@ -114,7 +144,13 @@ def _register(coordinator: SpanCloudCoordinator, async_add_entities: AddEntities
 
 
 class SpanSensor(CoordinatorEntity[SpanCloudCoordinator], SensorEntity):
-    """A single SPAN property, updated by the push coordinator."""
+    """A single SPAN property, updated by the push coordinator.
+
+    The coordinator holds every frame as it arrives; this entity writes to Home
+    Assistant only what history needs — a time-weighted average when it moves,
+    big changes at once, and a heartbeat (see `span_client.throttle`). Anything
+    that wants the live figure reads the coordinator, not this state.
+    """
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -135,17 +171,52 @@ class SpanSensor(CoordinatorEntity[SpanCloudCoordinator], SensorEntity):
         self._attr_native_unit_of_measurement = native_unit
         self._attr_state_class = state_class
 
+        if spec.unit in _DIAGNOSTIC_UNITS:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+            self._attr_entity_registry_enabled_default = False
+        if spec.node_kind is NodeKind.CIRCUIT and spec.property_id == POWER_PROPERTY:
+            self._attr_extra_state_attributes = _breaker_attributes(spec)
+
+        policy = policy_for(spec.unit)
+        self._throttle = Throttle(policy) if policy is not None else None
+        self._value: float | None = None
+        self._was_available: bool | None = None
+
         self._attr_device_info = coordinator.device_info()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Show the latest reading straight away rather than waiting for a frame.
+        self._take((self.coordinator.data or {}).get(self._key))
+
+    def _take(self, reading: Reading | None) -> bool:
+        """Offer one reading; True if the value to show changed."""
+        value = _as_float(reading)
+        if value is None or reading is None:
+            return False
+        if self._throttle is None:
+            changed = value != self._value
+            self._value = value
+            return changed
+        written = self._throttle.offer(value, reading.timestamp)
+        if written is None:
+            return False
+        self._value = written
+        return True
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        changed = self._take((self.coordinator.data or {}).get(self._key))
+        available = self.available
+        if available != self._was_available:
+            self._was_available = available
+            changed = True
+        if changed:
+            self.async_write_ha_state()
 
     @property
     def native_value(self) -> float | None:
-        reading = self.coordinator.data.get(self._key)
-        if reading is None:
-            return None
-        try:
-            return float(reading.value)
-        except (TypeError, ValueError):
-            return None
+        return self._value
 
     @property
     def available(self) -> bool:
@@ -237,24 +308,48 @@ class SpanPanelOverheadSensor(CoordinatorEntity[SpanCloudCoordinator], SensorEnt
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: SpanCloudCoordinator) -> None:
+    def __init__(self, coordinator: SpanCloudCoordinator, feed: PropertySpec) -> None:
         super().__init__(coordinator)
         serial = coordinator.serial
         self._attr_unique_id = f"{serial}_panel/overhead"
         self._attr_device_info = coordinator.device_info()
+        # Written on the same rules as every other power sensor; the figure is
+        # true at the main feed's timestamp, which the circuits share.
+        self._feed_key = feed.key
+        self._throttle = Throttle(POWER)
+        self._value: float | None = None
+        self._was_available: bool | None = None
 
-    @property
-    def native_value(self) -> float | None:
+    def _live(self) -> float | None:
         schema = self.coordinator.schema
         if schema is None:
             return None
         return panel_overhead(schema, self.coordinator.data or {})
 
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        changed = False
+        watts = self._live()
+        feed = (self.coordinator.data or {}).get(self._feed_key)
+        if watts is not None and feed is not None:
+            written = self._throttle.offer(watts, feed.timestamp)
+            if written is not None:
+                self._value = written
+                changed = True
+        available = self.available
+        if available != self._was_available:
+            self._was_available = available
+            changed = True
+        if changed:
+            self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        return self._value
+
     @property
     def available(self) -> bool:
-        return (
-            super().available and self.coordinator.stream_is_live and self.native_value is not None
-        )
+        return super().available and self.coordinator.stream_is_live and self._value is not None
 
 
 class SpanPanelOverheadEnergySensor(CoordinatorEntity[SpanCloudCoordinator], RestoreSensor):

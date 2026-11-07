@@ -55,6 +55,13 @@ class PropertySpec:
     # Node display name, e.g. a circuit's user-assigned label. Resolved after
     # the schema is parsed, since a circuit's `name` arrives as a property.
     node_name: str | None = None
+    # What the trait snapshot knows about the breaker behind a circuit node:
+    # the panel spaces it occupies, its rating, and whether it is a 120 V
+    # single-pole or a 240 V two-pole breaker. Empty for anything that is not
+    # a branch circuit, and for a circuit the snapshot could not resolve.
+    spaces: tuple[int, ...] = ()
+    breaker_amps: int | None = None
+    volts: int | None = None
 
     @property
     def key(self) -> str:
