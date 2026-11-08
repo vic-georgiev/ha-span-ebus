@@ -56,7 +56,9 @@ from span_client.cloud_traits import CircuitInfo, parse_trait_snapshot  # noqa: 
 
 SCHEMA = ROOT / "docs" / "reference" / "span-cloud-schema.txt"
 ATTACH_SECONDS = 3
-CONSTANT = re.compile(r"^[A-Z][A-Z0-9_]{2,}$")
+# Kept as-is: enum-like constants. An underscore is required, since serials and
+# pairing codes can also be all capitals.
+CONSTANT = re.compile(r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$")
 
 # The only calls this tool can make. Everything else on the service writes, or
 # triggers something, and is refused before it is sent.
@@ -76,6 +78,19 @@ READ_CALLS = frozenset(
 # Beyond the app's 31: every trait id up to 64 in SPAN's namespace (vendor 1) and a
 # few in the common one (vendor 5), to find traits the app does not ask for.
 WIDE_TRAITS = tuple((1, n) for n in range(1, 65)) + tuple((5, n) for n in range(1, 9))
+
+# Traits identified by matching a capture against the SPAN app (2026-11-07):
+# values and their order agree with what the app shows for the same breakers.
+KNOWN_TRAITS = {
+    (1, 12): "panel: size, feeder rating, install record",
+    (1, 15): "circuit position: refs to label and spaces",
+    (1, 16): "circuit (CircuitTrait): type, voltage, amps, name, appliance",
+    (1, 17): "panel space: displayed number",
+    (1, 20): "breaker module: 8 spaces, model, serial",
+    (1, 21): "feeder: main breaker rating, feed-through lugs",
+    (1, 31): "switch config: shed policy, backup priority, PowerUp rank, relay",
+    (1, 32): "PowerUp service limit and its thresholds",
+}
 
 _WIRE_FOR = {
     0: {"int64", "uint64", "int32", "uint32", "bool", "enum", "sint32", "sint64"},
@@ -171,7 +186,8 @@ def flatten(raw: bytes, redact: Redactor, prefix: str = "", depth: int = 0) -> l
         elif wire == 5:
             out.append(f"{path}={struct.unpack('<f', value.to_bytes(4, 'little'))[0]:g}f")
         elif wire == 1:
-            out.append(f"{path}={struct.unpack('<d', value.to_bytes(8, 'little'))[0]:g}d")
+            # Doubles are withheld: the ones seen so far are the home's coordinates.
+            out.append(f"{path}=<double>")
         else:
             out.extend(_flatten_len(path, value, redact, depth))
     return out
@@ -195,6 +211,17 @@ def _flatten_len(path: str, value: bytes, redact: Redactor, depth: int) -> list[
     if depth < 12:
         return flatten(value, redact, path, depth + 1)
     return [f"{path}=<bytes:{len(value)}>"]
+
+
+def _inner(value: bytes) -> bytes:
+    """A snapshot trait value is `{1: <the trait message>}`; return the message."""
+    try:
+        fields = list(iter_fields(value))
+    except (ProtoError, ValueError, IndexError):
+        return value
+    if len(fields) == 1 and fields[0][0] == 1 and fields[0][1] == 2:
+        return fields[0][2]
+    return value
 
 
 def top_level_wires(raw: bytes) -> dict[int, set[int]]:
@@ -280,12 +307,16 @@ def trait_lines(
     for (vendor, trait), group in sorted(by_trait.items()):
         seen: dict[int, set[int]] = defaultdict(set)
         for entry in group:
-            for no, wires in top_level_wires(entry.value).items():
+            for no, wires in top_level_wires(_inner(entry.value)).items():
                 seen[no] |= wires
         fits = candidates(seen, schema)
         best = fits[0][0] if fits else None
         lines.append("")
-        lines.append(f"-- trait {vendor}/{trait}: {len(group)} instance(s)")
+        known = KNOWN_TRAITS.get((vendor, trait))
+        lines.append(
+            f"-- trait {vendor}/{trait}: {len(group)} instance(s)"
+            + (f"  [identified: {known}]" if known else "")
+        )
         lines.append(
             "   shape fits (a guess): "
             + (
