@@ -50,29 +50,29 @@ dotted path. In its reports, `1.2.2.1=4` means: field 1 of the value (the trait 
 
 ## Trait Reference
 
-| Trait  | Meaning                    | Status    | Fields (from the trait message)                                                                                                            |
-| ------ | -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `1/2`  | Gateway clock or boot      | Guess     | `3.1.1`, `4.1.1` epoch ms a few days old (a reboot or update?); `5` 125 / 224, unknown                                                     |
-| `1/4`  | Cellular interface         | Confirmed | network interface (see below); also `2` IMEI, `10` ICCID, `5` carrier, `4`=5, `7`=4, `9`=2 (signal level is one of these)                  |
-| `1/5`  | Ethernet interface         | Confirmed | network interface (see below)                                                                                                              |
-| `1/6`  | Wi-Fi interface            | Confirmed | network interface (see below); `2` active access point: `4` frequency MHz, `5`=10 (signal?)                                                |
-| `1/7`  | Interface order            | Strong    | `1` TraitRefs to `5/5`, `5/6`, `5/4` (Ethernet, Wi-Fi, cellular); `2` the interface in use (Ethernet on both)                              |
-| `1/12` | Panel                      | Strong    | `17.1` size (16 or 40); `22.1.2` feeder rating in mA; `34` install record (year, model codes)                                              |
-| `1/14` | Site                       | Strong    | location as doubles (withheld); `11.1` epoch ms the site was set up; `23.2.2.1` latest report time                                         |
-| `1/15` | Circuit position           | Confirmed | TraitRefs to the circuit's `1/16` label and `1/17` spaces, under field 11 or 13                                                            |
-| `1/16` | Circuit label              | Confirmed | `1` load type (1 lights, 2 outlets, 3 appliance?); `2` voltage (1 = 120 V, 3 = 240 V); `3` breaker amps; `4` name                          |
-| `1/17` | Space                      | Confirmed | `3` the space number as printed on the panel                                                                                               |
-| `1/18` | Battery                    | Strong    | Tesla; `4.1.1` 13500 Wh and `4.11` 11500 W (one Powerwall 3; the expansion unit is not counted); `3.1.2.1` latest contact?                 |
-| `1/20` | Breaker module             | Strong    | eight-space modules, model `1-02469-04`                                                                                                    |
-| `1/21` | Feeder                     | Confirmed | `2` kind (3 = main breaker, 4 = feed-through lugs); `4` and `5` rating in A                                                                |
-| `1/26` | Wiring leg                 | Strong    | `1.11`: 1 or 2 = leg, 4 = two-pole                                                                                                         |
-| `1/31` | Switch and load management | Confirmed | see below                                                                                                                                  |
-| `1/32` | PowerUp limits             | Confirmed | `2.1` limit in mA; `5` role (1 = service limit, 4 = battery limit); `11`..`14` stage thresholds, not decoded                               |
-| `1/38` | Battery shed threshold     | Strong    | `1.1` 13500 Wh; `7` 500 / 490 / 510 in tenths of a percent: the 50% threshold of "stay on until 50% battery", with 49% and 51% either side |
-| `1/40` | Battery alerts             | Confirmed | `11` one per alert: `1` id, `2` severity?, `3.1` epoch ms; the kind is which empty field follows (`7` "issue", `6` "connection lost")      |
-| `1/45` | Metering                   | Guess     | `2` meter accuracy?, `3` expected source meters?                                                                                           |
-| `1/46` | DER backup                 | Guess     | `1` backup state, `2` SPAN MID used                                                                                                        |
-| `5/1`  | Device description         | Strong    | `4` serial, `5` firmware, `7` supported traits, `9` part number                                                                            |
+| Trait  | Meaning                    | Status    | Fields (from the trait message)                                                                                                                                                            |
+| ------ | -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `1/2`  | Gateway clock or boot      | Guess     | `3.1.1`, `4.1.1` epoch ms a few days old (a reboot or update?); `5` 125 / 224, unknown                                                                                                     |
+| `1/4`  | Cellular interface         | Confirmed | network interface (see below); also `2` IMEI, `10` ICCID, `5` carrier, `4`=5, `7`=4, `9`=2 (signal level is one of these)                                                                  |
+| `1/5`  | Ethernet interface         | Confirmed | network interface (see below)                                                                                                                                                              |
+| `1/6`  | Wi-Fi interface            | Confirmed | network interface (see below); `2` active access point: `4` frequency MHz, `5`=10 (signal?)                                                                                                |
+| `1/7`  | Interface order            | Strong    | `1` TraitRefs to `5/5`, `5/6`, `5/4` (Ethernet, Wi-Fi, cellular); `2` the interface in use (Ethernet on both)                                                                              |
+| `1/12` | Panel                      | Strong    | `17.1` size (16 or 40); `22.1.2` feeder rating in mA; `34` install record (year, model codes)                                                                                              |
+| `1/14` | Site                       | Strong    | location as doubles (withheld); `11.1` epoch ms the site was set up; `23.2.2.1` latest report time                                                                                         |
+| `1/15` | Circuit position           | Confirmed | `2` kind (1 branch circuit, 3 the battery's breaker); TraitRefs to the `1/16` label and `1/17` spaces, under field 11 (single-pole), 13 (two-pole) or 12 (the battery's breaker, no label) |
+| `1/16` | Circuit label              | Confirmed | `1` load type (1 lights, 2 outlets, 3 appliance?); `2` voltage (1 = 120 V, 3 = 240 V); `3` breaker amps; `4` name                                                                          |
+| `1/17` | Space                      | Confirmed | `3` the space number as printed on the panel                                                                                                                                               |
+| `1/18` | Battery                    | Strong    | Tesla; `4.1.1` 13500 Wh and `4.11` 11500 W (one Powerwall 3; the expansion unit is not counted); `3.1.2.1` latest contact?                                                                 |
+| `1/20` | Breaker module             | Strong    | eight-space modules, model `1-02469-04`                                                                                                                                                    |
+| `1/21` | Feeder                     | Confirmed | `2` kind (3 = main breaker, 4 = feed-through lugs); `4` and `5` rating in A                                                                                                                |
+| `1/26` | Wiring leg                 | Strong    | `1.11`: 1 or 2 = leg, 4 = two-pole                                                                                                                                                         |
+| `1/31` | Switch and load management | Confirmed | see below                                                                                                                                                                                  |
+| `1/32` | PowerUp limits             | Confirmed | `2.1` limit in mA; `5` role (1 = service limit, 4 = battery limit); `11`..`14` stage thresholds, not decoded                                                                               |
+| `1/38` | Battery shed threshold     | Strong    | `1.1` 13500 Wh; `7` 500 / 490 / 510 in tenths of a percent: the 50% threshold of "stay on until 50% battery", with 49% and 51% either side                                                 |
+| `1/40` | Battery alerts             | Confirmed | `11` one per alert: `1` id, `2` severity?, `3.1` epoch ms; the kind is which empty field follows (`7` "issue", `6` "connection lost")                                                      |
+| `1/45` | Metering                   | Guess     | `2` meter accuracy?, `3` expected source meters?                                                                                                                                           |
+| `1/46` | DER backup                 | Guess     | `1` backup state, `2` SPAN MID used                                                                                                                                                        |
+| `5/1`  | Device description         | Strong    | `4` serial, `5` firmware, `7` supported traits, `9` part number                                                                                                                            |
 
 ### Trait 1/31: Switch and Load Management
 
@@ -162,17 +162,19 @@ The app's e-mailed export is the same data at hourly resolution:
 How the official integration's cloud transport fills its snapshot (`cloud/snapshot.py` in vic-georgiev/span). Configuration is re-read with each snapshot refresh and published as
 readings, so a change made in the app reaches Home Assistant without a reload.
 
-| Snapshot field                                  | Source                     |
-| ----------------------------------------------- | -------------------------- |
-| `circuit.priority`, `is_sheddable`              | `1/31` backup priority     |
-| `circuit.pcs_priority`                          | `1/31` PowerUp rank        |
-| `circuit.breaker_rating_a`, `tabs`              | `1/16` amps, `1/17` spaces |
-| `main_breaker_rating_a`                         | `1/21` main breaker        |
-| `pcs.import_limit_a`, `pcs.feed_import_limit_a` | `1/32` role 1              |
-| `pcs.off_grid_import_limit_a`                   | `1/32` role 4              |
-| `feedthrough_power_w`                           | panel sample field 2       |
-| `eth0_link`, `wlan_link`, `wwan_link`           | `1/5`, `1/6`, `1/4` state  |
-| `circuit.always_on` (and no switch when set)    | `1/31` shed policy 1       |
+| Snapshot field                                         | Source                                             |
+| ------------------------------------------------------ | -------------------------------------------------- |
+| `circuit.priority`, `is_sheddable`                     | `1/31` backup priority                             |
+| `circuit.pcs_priority`                                 | `1/31` PowerUp rank                                |
+| `circuit.breaker_rating_a`, `tabs`                     | `1/16` amps, `1/17` spaces                         |
+| `main_breaker_rating_a`                                | `1/21` main breaker                                |
+| `pcs.import_limit_a`, `pcs.feed_import_limit_a`        | `1/32` role 1                                      |
+| `pcs.off_grid_import_limit_a`                          | `1/32` role 4                                      |
+| `feedthrough_power_w`                                  | panel sample field 2                               |
+| `eth0_link`, `wlan_link`, `wwan_link`                  | `1/5`, `1/6`, `1/4` state                          |
+| `circuit.always_on` (and no switch when set)           | `1/31` shed policy 1                               |
+| `circuit.tabs` of the battery's breaker, named Battery | `1/15` field 12 refs to `1/17`                     |
+| `first_space` (card starts its grid there)             | 9 on a MAIN 40 or 16: `1/17` numbers spaces from 9 |
 
 Still unresolved: never-backup, relay requester, produced energy, door, uptime, whether PowerUp is limiting now.
 Priority can be read but not written over the cloud, so no priority select is offered.
