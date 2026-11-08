@@ -79,7 +79,7 @@ dotted path. In its reports, `1.2.2.1=4` means: field 1 of the value (the trait 
 ```text
 1: TraitRef back to the 1/15 circuit (check it: a mismatch means the entry is not this circuit's)
 2: config {
-     1:  shed policy (2 almost everywhere; 1 on the battery breaker and one MAIN 16 circuit)
+     1:  shed policy (1 always on: the app setting, and the battery breaker; 2 every other)
      2:  backup { 1: backup priority }
      3:  { 2: minimum current, mA }
      18: minimum reconnect, s
@@ -102,9 +102,9 @@ dotted path. In its reports, `1.2.2.1=4` means: field 1 of the value (the trait 
 **PowerUp rank** (`2.22`, confirmed): sorting by rank ascending reproduces the app's PowerUp control-action list on both panels. Equal ranks are a tie
 the app breaks by breaker rating, highest first, then by space. A circuit with no rank is listed last.
 
-**Always on** (strong, waiting on one check): shed policy `1` is the likely flag. It appears on exactly one user circuit, on the MAIN 16, which is the
-only panel the app shows an always-on breaker for. Its other appearance is the Powerwall's own breaker, which nothing should ever turn off. To confirm:
-the always-on breaker's space in the app should be the space of the MAIN 16's policy-1 entry (24).
+**Always on** (strong): shed policy `1`. Exactly one breaker was set to always on in the app, on the MAIN 16, with none on the MAIN 40 as a
+control; exactly one user circuit has policy `1`, on the MAIN 16 (space 24). Its only other appearance is the Powerwall's own breaker, which SPAN
+never turns off. To confirm outright: set one MAIN 40 breaker to always on, re-run the inventory, expect its `2.1` to read `1`, then set it back.
 
 ### Traits 1/4, 1/5, 1/6: Network Interfaces
 
@@ -172,8 +172,9 @@ readings, so a change made in the app reaches Home Assistant without a reload.
 | `pcs.off_grid_import_limit_a`                   | `1/32` role 4              |
 | `feedthrough_power_w`                           | panel sample field 2       |
 | `eth0_link`, `wlan_link`, `wwan_link`           | `1/5`, `1/6`, `1/4` state  |
+| `circuit.always_on` (and no switch when set)    | `1/31` shed policy 1       |
 
-Still unresolved: always on, never-backup, relay requester, produced energy, door, uptime, whether PowerUp is limiting now.
+Still unresolved: never-backup, relay requester, produced energy, door, uptime, whether PowerUp is limiting now.
 Priority can be read but not written over the cloud, so no priority select is offered.
 
 ## Open Questions
@@ -181,6 +182,8 @@ Priority can be read but not written over the cloud, so no priority select is of
 - The always-on field (see above).
 - Cellular signal level: `1/4` fields `4`, `7`, `9` are the candidates; both panels read "Good", so a change is needed to tell them apart.
 - The `ListDispatches` request shape, for alerts other than the battery's.
-- Ethernet on the MAIN 16: the snapshot has it connected and in use, but the app's Connectivity screen for that panel was reported as cellular only.
+- Local access. Both panels are wired to SPAN's Network Kit, a MikroTik hEX S inside the MAIN 40, which routes them (and the Powerwall) to the home
+  network with NAT, so they cannot be reached from the home LAN through it. The MAIN 40 is also on the home Wi-Fi, which is how it was reached for
+  `FINDINGS.md`; the MAIN 16 is not. SPAN's local API is live on the MAIN 32 only; for the MAIN 16 and MAIN 40 it was announced for later in 2026.
 - The grid-status override the app offers ("Assumed grid status"), and where it lives.
 - Battery capacity: the snapshot says 13.5 kWh for a Powerwall 3 with an expansion unit. Check again after commissioning.
