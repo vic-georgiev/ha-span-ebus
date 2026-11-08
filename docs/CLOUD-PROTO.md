@@ -2,7 +2,9 @@
 
 The Ably realtime frames (see [CLOUD-FLOW.md](CLOUD-FLOW.md) §3) are base64
 **protobuf** with no public `.proto`. This document is the recovered schema and
-the telemetry-decode map — the last blocker for the cloud backend.
+the telemetry-decode map — the last blocker for the cloud backend. The trait
+snapshot (configuration: names, priorities, PowerUp, limits) and the energy
+history are in [CLOUD-TRAITS.md](CLOUD-TRAITS.md).
 
 ## How it was recovered
 
