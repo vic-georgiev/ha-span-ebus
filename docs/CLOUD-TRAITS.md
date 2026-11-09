@@ -106,35 +106,31 @@ the app breaks by breaker rating, highest first, then by space. A circuit with n
 control; exactly one user circuit has policy `1`, on the MAIN 16 (space 24). Its only other appearance is the Powerwall's own breaker, which SPAN
 never turns off. To confirm outright: set one MAIN 40 breaker to always on, re-run the inventory, expect its `2.1` to read `1`, then set it back.
 
-### Trait 1/16: Renaming a Circuit
+### Renaming a Circuit (trait 1/15)
 
-Status: **Inferred from the app bundle, not yet tested against a panel.**
+Status: **second attempt, inferred from the app bundle, awaiting a live test.**
 
-The label trait is `io.span.traits.circuitry.CircuitTrait`: `1` type, `2` voltage rating,
-`3` breaker amps, `4` name, `5` home locations, `6` appliance types, `7` appliances. Its
-command message, from `docs/reference/span-cloud-schema.txt`:
+- **Tried and failed (2026-11-09, MAIN 40):** `CircuitTrait.CircuitCommandRequests { 2: edit_circuit
+  { 1: name } }` addressed to the label instance (`1/16`). SPAN acknowledged it, but the panel kept
+  the old name. `SendMessages` only acknowledges receipt; the real answer goes to the app's Ably trait
+  channel, which we do not read.
+- **Current attempt:** the homeowner's rename is an update of the **breaker** (`1/15`, the circuit's
+  own instance). `HomeownerEditCircuit { 1: name }` is the leaf of the homeowner breaker update:
 
 ```
-CircuitTrait.CircuitCommandRequests
-  1: update_appliance_request = message  (oneof=request)
-  2: edit_circuit             = message  (oneof=request)
-
-HomeownerEditCircuit
-  1: name = string
+CircuitBreakerCommandRequests
+  3: homeowner_update_circuit_breaker_request = HomeownerUpdateCircuitBreakerRequest
+       10: one_p_standard { 1: circuit = HomeownerEditCircuit { 1: name } }       one space
+       11: two_p_standard { 3: standard { 1: circuit = HomeownerEditCircuit } }  two spaces
+       12: one_p_tandem, 13: two_p_tandem_quad, 14: two_p_quad                    not built
 ```
 
-- A rename posts `CircuitCommandRequests { 2: { 1: "<name>" } }` on `SendMessages`, in a
-  `TraitMessage` addressed to the **label** instance (the `1/16` the circuit's `1/15` position
-  points at), not to the breaker. The envelope is the one the relay commands use.
-- The edit carries only the name, so it cannot reset the type, voltage or amps.
-- Which message `edit_circuit` holds is not in the bundle's field literal. `HomeownerEditCircuit`
-  is the only homeowner edit, matching `homeowner_update_circuit_breaker_request` on the
-  breaker. The installer's `InstallerSimpleEditCircuit { 1: amps, 2: name }` is the alternative;
-  if the panel wanted that, a string in its varint field 1 is malformed and should be refused,
-  not misread.
+- The breaker shape is chosen by how many spaces the circuit takes (`1/17` refs). The update names
+  only the name, so it cannot reset the type, voltage or amps.
+- A rename counts as done only when a re-read snapshot carries the new name.
 - Used by: `cloud_commands.build_rename_request` in vic-georgiev/span `cloud-transport`.
-- To confirm: rename a spare circuit from Home Assistant, check the name in the SPAN app,
-  re-read the snapshot to see that `3` (amps) is unchanged, and rename it back.
+- To confirm: rename a spare circuit from Home Assistant, check the SPAN app, check that the breaker
+  rating is unchanged, and rename it back.
 
 ### Traits 1/4, 1/5, 1/6: Network Interfaces
 
