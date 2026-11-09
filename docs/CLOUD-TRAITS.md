@@ -106,6 +106,36 @@ the app breaks by breaker rating, highest first, then by space. A circuit with n
 control; exactly one user circuit has policy `1`, on the MAIN 16 (space 24). Its only other appearance is the Powerwall's own breaker, which SPAN
 never turns off. To confirm outright: set one MAIN 40 breaker to always on, re-run the inventory, expect its `2.1` to read `1`, then set it back.
 
+### Trait 1/16: Renaming a Circuit
+
+Status: **Inferred from the app bundle, not yet tested against a panel.**
+
+The label trait is `io.span.traits.circuitry.CircuitTrait`: `1` type, `2` voltage rating,
+`3` breaker amps, `4` name, `5` home locations, `6` appliance types, `7` appliances. Its
+command message, from `docs/reference/span-cloud-schema.txt`:
+
+```
+CircuitTrait.CircuitCommandRequests
+  1: update_appliance_request = message  (oneof=request)
+  2: edit_circuit             = message  (oneof=request)
+
+HomeownerEditCircuit
+  1: name = string
+```
+
+- A rename posts `CircuitCommandRequests { 2: { 1: "<name>" } }` on `SendMessages`, in a
+  `TraitMessage` addressed to the **label** instance (the `1/16` the circuit's `1/15` position
+  points at), not to the breaker. The envelope is the one the relay commands use.
+- The edit carries only the name, so it cannot reset the type, voltage or amps.
+- Which message `edit_circuit` holds is not in the bundle's field literal. `HomeownerEditCircuit`
+  is the only homeowner edit, matching `homeowner_update_circuit_breaker_request` on the
+  breaker. The installer's `InstallerSimpleEditCircuit { 1: amps, 2: name }` is the alternative;
+  if the panel wanted that, a string in its varint field 1 is malformed and should be refused,
+  not misread.
+- Used by: `cloud_commands.build_rename_request` in vic-georgiev/span `cloud-transport`.
+- To confirm: rename a spare circuit from Home Assistant, check the name in the SPAN app,
+  re-read the snapshot to see that `3` (amps) is unchanged, and rename it back.
+
 ### Traits 1/4, 1/5, 1/6: Network Interfaces
 
 The three share one layout:
