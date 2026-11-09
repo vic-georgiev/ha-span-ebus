@@ -108,7 +108,7 @@ never turns off. To confirm outright: set one MAIN 40 breaker to always on, re-r
 
 ### Renaming a Circuit (trait 1/15)
 
-Status: **second attempt, inferred from the app bundle, awaiting a live test.**
+Status: **Confirmed (2026-11-09):** a circuit renamed from Home Assistant this way showed the new name in the SPAN app.
 
 - **Tried and failed (2026-11-09, MAIN 40):** `CircuitTrait.CircuitCommandRequests { 2: edit_circuit
   { 1: name } }` addressed to the label instance (`1/16`). SPAN acknowledged it, but the panel kept
