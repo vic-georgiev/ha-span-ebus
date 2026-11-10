@@ -106,6 +106,26 @@ the app breaks by breaker rating, highest first, then by space. A circuit with n
 control; exactly one user circuit has policy `1`, on the MAIN 16 (space 24). Its only other appearance is the Powerwall's own breaker, which SPAN
 never turns off. To confirm outright: set one MAIN 40 breaker to always on, re-run the inventory, expect its `2.1` to read `1`, then set it back.
 
+### Changing Load-Management Settings (trait 1/31)
+
+Status: **Inferred from the app bundle, awaiting a live test.**
+
+```
+SwitchLoadManagementTrait.SwitchLoadManagementCommandRequests
+  4: set_preferred_disconnect_rank_request { 1: preferred_disconnect_rank }   PowerUp order
+  5: set_backup_config_request             { 1: backup_config { 1: priority } }  backup priority
+  6: set_shed_policy_request               { 1: shed_policy }                 always on (1) / managed (2)
+```
+
+- Posted on `SendMessages` to the circuit's own `1/31` instance (the one whose `1` refers back to its `1/15`).
+- `backup_config`'s type is not in the bundle's field literal; the snapshot's `config.2 = Backup { 1: priority }` shape
+  is sent.
+- The homeowner's rank is the **preferred** rank, `config.20`; `config.22` is the default it overrides, and
+  `PanelTrait` has `reset_panel_preferred_disconnect_rank_request` (12) to clear them all. Reads prefer `#20`.
+- Each change counts once a re-read snapshot reports it.
+- Used by: `cloud_commands.backup_priority_payload` / `shed_policy_payload` / `powerup_rank_payload` in
+  vic-georgiev/span `cloud-transport`.
+
 ### Renaming a Circuit (trait 1/15)
 
 Status: **Confirmed (2026-11-09)** for both one-space and two-space breakers: circuits renamed from Home Assistant showed the new name in the SPAN app, which updated live while open on the breaker list.
